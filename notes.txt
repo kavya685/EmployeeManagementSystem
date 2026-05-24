@@ -1,0 +1,158 @@
+## Think of it like a Restaurant 🍽️
+
+| Layer | Role | Example |
+|---|---|---|
+| **Repository** | Fetches raw data from DB | "Get all employees from MySQL" |
+| **Service** | Applies business rules on that data | "Only return active employees, calculate salary after tax" |
+
+---
+
+## They filter DIFFERENT things
+
+**Repository** deals with **database-level filtering:**
+```java
+// "Give me rows from DB where department = IT"
+List<Employee> findByDepartment(String department);
+```
+It's just talking to MySQL. No thinking, no rules. Just fetch.
+
+---
+
+**Service** deals with **business-level filtering/logic:**
+```java
+public List<EmployeeResponseDto> getITEmployees() {
+    List<Employee> employees = repository.findByDepartment("IT");
+
+    // business logic AFTER fetching
+    return employees.stream()
+        .filter(e -> e.isActive())           // only active ones
+        .map(e -> convertToDto(e))           // convert to response format
+        .collect(Collectors.toList());
+}
+```
+
+---
+
+## Real world example
+
+Say your boss says: **"Show only active employees who joined before 2023 and have salary > 50k"**
+
+- **Repository** → fetches employees from DB, maybe filters by join date (DB query)
+- **Service** → takes that list, checks if active, checks salary, converts to DTO, maybe sends an email notification too
+
+Repository doesn't know what "business rules" mean. Service doesn't know what SQL means. They each mind their own job.
+
+---
+
+**One line difference:**
+- Repository = *what data to pull from DB*
+- Service = *what to do with that data after pulling*
+
+
+
+
+## DTOs (Data Transfer Objects)
+
+### The problem without DTOs
+
+Your `Employee` entity (database table) might look like:
+```java
+public class Employee {
+    private Long id;
+    private String name;
+    private String email;
+    private String password;      // sensitive!
+    private Double salary;        // sensitive!
+    private String ssn;           // sensitive!
+}
+```
+
+If you directly return this entity to the client — **you're exposing password, salary, ssn!** 😱
+
+---
+
+### That's why we have 2 DTOs
+
+**RequestDto** → what client *sends* to you:
+```java
+public class EmployeeRequestDto {
+    private String name;
+    private String email;
+    private String department;
+    // no id (DB generates it), no salary (set internally)
+}
+```
+
+**ResponseDto** → what you *send back* to client:
+```java
+public class EmployeeResponseDto {
+    private Long id;
+    private String name;
+    private String email;
+    // no password, no ssn, no sensitive fields
+}
+```
+
+**Flow:**
+```
+Client sends RequestDto → Service converts to Entity → saves to DB
+DB data → Service converts to ResponseDto → Client receives it
+```
+
+---
+
+## Exceptions
+
+### Without exception handling
+If someone requests employee with id=999 (doesn't exist), Spring throws an ugly default error with a huge stack trace. Not helpful for the client.
+
+---
+
+### With proper exception handling
+
+**ResourceNotFoundException.java** — your custom exception:
+```java
+public class ResourceNotFoundException extends RuntimeException {
+    public ResourceNotFoundException(String message) {
+        super(message);
+    }
+}
+```
+
+You throw it in service when something isn't found:
+```java
+Employee employee = repository.findById(id)
+    .orElseThrow(() -> new ResourceNotFoundException(
+        "Employee not found with id: " + id
+    ));
+```
+
+---
+
+**GlobalExceptionHandler.java** — catches ALL exceptions in one place:
+```java
+@ControllerAdvice
+public class GlobalExceptionHandler {
+
+    @ExceptionHandler(ResourceNotFoundException.class)
+    public ResponseEntity<String> handleNotFound(ResourceNotFoundException ex) {
+        return ResponseEntity.status(404).body(ex.getMessage());
+    }
+}
+```
+
+Now instead of ugly stack trace, client gets a clean:
+```json
+"Employee not found with id: 999"
+```
+
+---
+
+## Quick Summary
+
+| | Purpose |
+|---|---|
+| **RequestDto** | Controls what client can send in |
+| **ResponseDto** | Controls what client can see |
+| **Custom Exception** | Your own meaningful error |
+| **GlobalExceptionHandler** | One place to handle all errors cleanly |
