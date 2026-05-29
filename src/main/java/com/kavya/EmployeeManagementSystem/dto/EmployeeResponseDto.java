@@ -5,6 +5,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+// you decide EXACTLY what client sees
 @Getter
 @Setter
 @NoArgsConstructor
