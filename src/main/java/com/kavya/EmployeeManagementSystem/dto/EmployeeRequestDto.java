@@ -16,10 +16,10 @@ import lombok.Setter;
 public class EmployeeRequestDto {
 
     @NotBlank(message = "first name is required")
-    private String firstname;
+    private String firstName;
 
     @NotBlank(message = "last name is required")
-    private String lastname;
+    private String lastName;
 
     @NotBlank(message = "email is required")
     @Email(message = "email should be valid")
